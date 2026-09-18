@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Turbopack optimized Next.js 16 configuration
 };
 
 export default nextConfig;

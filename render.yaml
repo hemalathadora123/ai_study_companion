@@ -10,7 +10,7 @@ services:
     region: oregon
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start:prod
-    healthCheckPath: /api/auth/me
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
