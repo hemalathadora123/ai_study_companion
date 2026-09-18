@@ -26,7 +26,7 @@ git push -u origin main
    - **Region:** Choose the region closest to you (e.g., Oregon, Frankfurt).
    - **Branch:** `main`
    - **Runtime:** `Node`
-   - **Build Command:** `npm install && npm run build`
+   - **Build Command:** `npm install --include=dev && npm run build`
    - **Start Command:** `npm run start:prod`
 5. **Environment Variables**:
    Under **Environment Variables**, add:
