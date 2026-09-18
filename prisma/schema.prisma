@@ -1,0 +1,369 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  name             String
+  password         String?
+  role             String           @default("USER") // USER, ADMIN
+  avatarUrl        String?
+  points           Int              @default(0)
+  level            Int              @default(1)
+  currentStreak    Int              @default(0)
+  longestStreak    Int              @default(0)
+  lastActiveDate   DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  spaces           Space[]
+  projects         Project[]
+  conversations    Conversation[]
+  quizzes          Quiz[]
+  quizAttempts     QuizAttempt[]
+  conceptMasteries  ConceptMastery[]
+  recommendations  Recommendation[]
+  learningEvents   LearningEvent[]
+  pointTransactions PointTransaction[]
+  flashcards       Flashcard[]
+}
+
+model Space {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  icon        String?   @default("Folder")
+  color       String?   @default("indigo")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects    Project[]
+
+  @@index([userId])
+}
+
+model Project {
+  id               String           @id @default(cuid())
+  spaceId          String
+  userId           String
+  name             String
+  description      String?
+  learningGoal     String
+  targetDate       DateTime?
+  status           String           @default("ACTIVE") // ACTIVE, ARCHIVED, COMPLETED
+  progress         Float            @default(0.0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  space            Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  materials        Material[]
+  documentChunks   DocumentChunk[]
+  concepts         Concept[]
+  conversations    Conversation[]
+  quizzes          Quiz[]
+  conceptMasteries ConceptMastery[]
+  recommendations  Recommendation[]
+  learningEvents   LearningEvent[]
+  pointTransactions PointTransaction[]
+  flashcards       Flashcard[]
+
+  @@index([spaceId])
+  @@index([userId])
+}
+
+model Material {
+  id               String          @id @default(cuid())
+  projectId        String
+  title            String
+  originalFilename String
+  fileUrl          String
+  fileSize         Int
+  mimeType         String          @default("application/pdf")
+  totalPages       Int             @default(0)
+  status           String          @default("QUEUED") // QUEUED, PROCESSING, READY, FAILED
+  errorMessage     String?
+  extractedText    String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks           DocumentChunk[]
+
+  @@index([projectId])
+}
+
+model DocumentChunk {
+  id          String   @id @default(cuid())
+  materialId  String
+  projectId   String
+  chunkIndex  Int
+  pageNumber  Int
+  content     String
+  tokenCount  Int      @default(0)
+  concepts    String?  // JSON string array of key concept tags
+  createdAt   DateTime @default(now())
+
+  material    Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([projectId])
+}
+
+model Concept {
+  id              String           @id @default(cuid())
+  projectId       String
+  name            String
+  description     String?
+  importanceLevel String           @default("HIGH") // HIGH, MEDIUM, LOW
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  masteries       ConceptMastery[]
+  questions       QuizQuestion[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model ConceptMastery {
+  id              String    @id @default(cuid())
+  userId          String
+  projectId       String
+  conceptId       String
+  masteryScore    Float     @default(0.0) // 0 to 100
+  status          String    @default("NEEDS_ATTENTION") // IMPROVING, STABLE, NEEDS_ATTENTION
+  totalAttempts   Int       @default(0)
+  correctAttempts Int       @default(0)
+  lastAssessedAt  DateTime?
+  historyJson     String?   // JSON array of historical entries [{ timestamp, score }]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  concept         Concept   @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId, conceptId])
+  @@index([userId, projectId])
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  projectId   String
+  userId      String
+  title       String    @default("Learning Session")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           String       // user, assistant, system
+  content        String
+  citationsJson  String?      // JSON array of [{ materialId, title, pageNumber, snippet }]
+  isUngrounded   Boolean      @default(false)
+  latencyMs      Int?
+  tokenCount     Int?
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model Quiz {
+  id              String         @id @default(cuid())
+  projectId       String
+  userId          String
+  title           String
+  status          String         @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED
+  totalQuestions  Int            @default(0)
+  score           Float?         // Overall %
+  difficultyLevel String         @default("ADAPTIVE")
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions       QuizQuestion[]
+  attempts        QuizAttempt[]
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+model QuizQuestion {
+  id                 String        @id @default(cuid())
+  quizId             String
+  conceptId          String?
+  questionType       String        // MCQ, OPEN_ENDED
+  prompt             String
+  optionsJson        String?       // JSON array of string options
+  correctOptionIndex Int?          // For MCQ
+  rubricJson         String?       // JSON object for open-ended rubric
+  explanation        String?
+
+  quiz               Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  concept            Concept?      @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  attempts           QuizAttempt[]
+
+  @@index([quizId])
+  @@index([conceptId])
+}
+
+model QuizAttempt {
+  id                  String       @id @default(cuid())
+  quizId              String
+  questionId          String
+  userId              String
+  selectedOptionIndex Int?
+  textResponse        String?
+  isCorrect           Boolean?
+  score               Float?       // 0 to 100 for open-ended
+  feedback            String?
+  missingConceptsJson String?      // JSON array of concepts not covered
+  answeredAt          DateTime     @default(now())
+
+  quiz                Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question            QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+  @@index([questionId])
+  @@index([userId])
+}
+
+model Recommendation {
+  id          String   @id @default(cuid())
+  projectId   String
+  userId      String
+  type        String   // REVIEW_MATERIAL, PRACTICE_QUIZ, EXPLORE_CONCEPT, REPEATED_MISTAKE_REMEDIATION
+  title       String
+  reason      String
+  priority    String   @default("MEDIUM") // HIGH, MEDIUM, LOW
+  targetUrl   String?
+  isCompleted Boolean  @default(false)
+  isDismissed Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+model LearningEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String?
+  eventType   String   // PROJECT_CREATED, MATERIAL_UPLOADED, MATERIAL_PROCESSED, TUTOR_INTERACTED, QUIZ_COMPLETED, MASTERY_UPDATED, MISTAKE_DETECTED, RECOMMENDATION_TRIGGERED
+  payloadJson String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([eventType])
+}
+
+model AiLog {
+  id               String   @id @default(cuid())
+  userId           String?
+  feature          String   // TUTOR, QUIZ_GENERATION, ASSESSMENT_EVALUATION, CONCEPT_EXTRACTION, RECOMMENDATIONS
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  latencyMs        Int      @default(0)
+  costEstimate     Float    @default(0.0)
+  status           String   @default("SUCCESS") // SUCCESS, ERROR
+  errorMessage     String?
+  metadataJson     String?
+  createdAt        DateTime @default(now())
+
+  @@index([feature])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model BackgroundJob {
+  id           String    @id @default(cuid())
+  jobType      String    // PROCESS_DOCUMENT, UPDATE_MASTERY, DETECT_REPEATED_MISTAKES, GENERATE_RECOMMENDATIONS
+  status       String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  retryCount   Int       @default(0)
+  maxRetries   Int       @default(3)
+  payloadJson  String
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  processedAt  DateTime?
+
+  @@index([status])
+  @@index([jobType])
+}
+
+model PointTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String?
+  points      Int
+  reason      String   // DAILY_LOGIN, TUTOR_QUESTION, VOICE_INTERACTION, QUIZ_COMPLETED, PERFECT_QUIZ, STREAK_BONUS, MATERIAL_UPLOADED, CONCEPT_MASTERED
+  description String
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model Flashcard {
+  id             String    @id @default(cuid())
+  projectId      String
+  userId         String
+  materialId     String?
+  conceptName    String?
+  frontQuestion  String
+  backAnswer     String
+  hint           String?
+  sourceCitation String?
+  difficulty     String    @default("MEDIUM") // EASY, MEDIUM, HARD
+  reviewCount    Int       @default(0)
+  masteryLevel   Int       @default(0) // 0 to 5 (SM-2 / Leitner Box)
+  lastReviewedAt DateTime?
+  nextReviewDate DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([conceptName])
+}

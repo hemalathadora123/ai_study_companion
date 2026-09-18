@@ -1,0 +1,21 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-study-companion
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      # Persistent storage for SQLite database & uploaded documents
+      - study_db:/app/prisma
+      - study_uploads:/app/public/uploads
+
+volumes:
+  study_db:
+  study_uploads:
