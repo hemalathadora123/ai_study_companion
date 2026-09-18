@@ -13,8 +13,12 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
-# Install dependencies (npm install resolves glibc native bindings for LightningCSS & Tailwind v4)
-RUN npm install
+# Install dependencies and ensure Linux prebuilt binary for lightningcss
+RUN npm install && \
+    npm install --no-save lightningcss-linux-x64-gnu@1.32.0 lightningcss-linux-arm64-gnu@1.32.0 || true && \
+    if [ -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node ]; then \
+      cp node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node node_modules/lightningcss/ 2>/dev/null || true; \
+    fi
 
 # Stage 2: Build Next.js application
 FROM node:20-slim AS builder
@@ -24,6 +28,11 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Ensure lightningcss native binding is also copied into lightningcss directory
+RUN if [ -f node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node ]; then \
+      cp node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node node_modules/lightningcss/ 2>/dev/null || true; \
+    fi
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
